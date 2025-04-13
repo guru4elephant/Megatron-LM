@@ -665,3 +665,129 @@ Below are some of the projects where we have directly used Megatron:
 * [Shall We Pretrain Autoregressive Language Models with Retrieval? A Comprehensive Study](https://arxiv.org/abs/2304.06762)
 * [InstructRetro: Instruction Tuning post Retrieval-Augmented Pretraining](https://arxiv.org/abs/2310.07713)
 * [An Empirical Study of Mamba-based Language Models](https://arxiv.org/abs/2406.07887)
+
+# Megatron Core 训练示例
+
+这个示例脚本演示了如何使用NVIDIA的Megatron Core框架来构建和训练一个简单的Transformer模型。
+
+## 功能
+
+- 使用Megatron Core的Transformer组件构建模型
+- 支持张量并行(Tensor Parallelism)和流水线并行(Pipeline Parallelism)
+- 支持混合精度训练(FP16/BF16)
+- 包含简单的随机数据生成器用于演示
+
+## 依赖
+
+- PyTorch >= 1.13
+- NVIDIA Megatron-LM (特别是megatron.core模块)
+- Transformer Engine (被Megatron Core使用)
+
+## 使用方法
+
+### 单GPU训练
+
+```bash
+python megatron_core_training_example.py
+```
+
+### 多GPU训练(单节点)
+
+使用`torch.distributed.launch`或`torchrun`：
+
+```bash
+# 使用4个GPU进行训练
+torchrun --nproc_per_node=4 megatron_core_training_example.py --world-size 4 --tensor-model-parallel-size 2 --pipeline-model-parallel-size 1
+```
+
+### 多节点分布式训练
+
+```bash
+# 在第一个节点上运行
+torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 --master_addr="192.168.1.1" --master_port=12345 \
+    megatron_core_training_example.py --world-size 16 --init-method "tcp://192.168.1.1:12345" \
+    --tensor-model-parallel-size 2 --pipeline-model-parallel-size 2
+
+# 在第二个节点上运行
+torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr="192.168.1.1" --master_port=12345 \
+    megatron_core_training_example.py --world-size 16 --init-method "tcp://192.168.1.1:12345" \
+    --tensor-model-parallel-size 2 --pipeline-model-parallel-size 2
+```
+
+## 主要参数
+
+### 模型参数
+
+- `--num-layers`: Transformer的层数
+- `--hidden-size`: 隐藏层大小
+- `--num-attention-heads`: 注意力头数
+- `--ffn-hidden-size`: 前馈网络隐藏层大小
+- `--vocab-size`: 词汇表大小
+- `--seq-length`: 序列长度
+
+### 训练参数
+
+- `--batch-size`: 每个GPU的批处理大小
+- `--epochs`: 训练轮数
+- `--train-steps`: 训练步数
+- `--lr`: 学习率
+- `--warmup-steps`: 预热步数
+
+### 并行参数
+
+- `--tensor-model-parallel-size`: 张量并行大小
+- `--pipeline-model-parallel-size`: 流水线并行大小
+
+### 精度参数
+
+- `--fp16`: 使用FP16混合精度训练
+- `--bf16`: 使用BF16混合精度训练
+
+## 示例用法
+
+1. 训练一个小型模型(适合单GPU):
+
+```bash
+python megatron_core_training_example.py \
+    --num-layers 4 \
+    --hidden-size 256 \
+    --num-attention-heads 8 \
+    --batch-size 16 \
+    --train-steps 1000
+```
+
+2. 使用张量并行训练较大模型:
+
+```bash
+torchrun --nproc_per_node=4 megatron_core_training_example.py \
+    --world-size 4 \
+    --tensor-model-parallel-size 4 \
+    --num-layers 8 \
+    --hidden-size 768 \
+    --num-attention-heads 12 \
+    --batch-size 8 \
+    --train-steps 2000 \
+    --fp16
+```
+
+3. 同时使用张量并行和流水线并行:
+
+```bash
+torchrun --nproc_per_node=4 megatron_core_training_example.py \
+    --world-size 4 \
+    --tensor-model-parallel-size 2 \
+    --pipeline-model-parallel-size 2 \
+    --num-layers 12 \
+    --hidden-size 768 \
+    --num-attention-heads 12 \
+    --batch-size 8 \
+    --train-steps 2000 \
+    --fp16
+```
+
+## 注意事项
+
+- 本示例使用随机生成的数据，实际应用中应替换为真实数据集
+- 对于大模型训练，请确保使用足够的GPU内存
+- 分布式训练时需要正确设置网络连接参数
+- 当使用流水线并行时，确保层数可以被流水线并行度整除
